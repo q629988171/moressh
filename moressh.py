@@ -8,6 +8,11 @@ from tqdm import tqdm
 
 
 def format_message(msg):
+    """格式化消息字符串
+
+    :param msg: 消息字符串
+    :return: 错误代码, 错误说明
+    """
     if len(msg) >= 2:
         errcode = msg[0]
         errmsg = msg[1]
@@ -18,6 +23,11 @@ def format_message(msg):
 
 
 def import_cvs(filepath):
+    """导入 cvs文件
+
+    :param filepath: 文件路径
+    :return: JSON字符串
+    """
     df = pandas.read_csv(filepath)
     # 创建按行方向的JSON字符串
     df_json = df.to_json(orient='records')
@@ -25,12 +35,20 @@ def import_cvs(filepath):
 
 
 def get_hosts(data):
-    # 将字符串转化为字典
+    """将字符串转化为字典
+
+    :param data: JSON字符串
+    :return: 主机信息(字典)
+    """
     hosts = json.loads(data)
     return hosts
 
 
 async def ssh2(host_conf):
+    """连接SSH, 执行命令
+
+    :param host_conf: 主机信息(字典)
+    """
     host = host_conf.get('host', '127.0.0.1')
     port = host_conf.get('port', 22)
     username = host_conf.get('username', 'admin')
@@ -58,6 +76,10 @@ async def ssh2(host_conf):
 
 
 async def excutor(hosts):
+    """调度SSH2协程
+
+    :param hosts: 主机信息(字典)
+    """
     tasks = []
     for host in hosts:
         task = asyncio.create_task(ssh2(host))
@@ -67,6 +89,7 @@ async def excutor(hosts):
 
 
 def main():
+    # 移除控制台输出
     logger.remove(handler_id=None)
     logger.add(sink="logs/moressh_{time}.log", enqueue=True)
     filepath = f"device_list.csv"
