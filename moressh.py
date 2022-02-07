@@ -1,11 +1,20 @@
 import asyncio
 import json
-from functools import partial
 
 import asyncssh
 import pandas as pandas
 from loguru import logger
 from tqdm import tqdm
+
+
+def format_message(msg):
+    if len(msg) >= 2:
+        errcode = msg[0]
+        errmsg = msg[1]
+    else:
+        errcode = -1
+        errmsg = msg[0]
+    return errcode, errmsg
 
 
 def import_cvs(filepath):
@@ -17,22 +26,8 @@ def import_cvs(filepath):
 
 def get_hosts(data):
     # 将字符串转化为字典
-    host_list = json.loads(data)
-    return host_list
-
-
-def on_job_done(host_conf, future):
-    # 获取主机名
-    host = host_conf.get('host', '127.0.0.1')
-    # 获取结果
-    ret = future.result()
-    if len(ret) >= 2:
-        errcode = ret[0]
-        errmsg = ret[1]
-    else:
-        errcode = -1
-        errmsg = ret[0]
-    logger.info(f"连接结束: {host}, errcode: {errcode}, errmsg: {errmsg}")
+    hosts = json.loads(data)
+    return hosts
 
 
 async def ssh2(host_conf):
@@ -55,18 +50,18 @@ async def ssh2(host_conf):
         ) as conn:
             # 执行SSH命令
             result = await conn.run(command)
-            return 0, result.stdout.strip()
+            logger.info(f"连接成功: {host}, 返回结果: {result.stdout.strip()}")
     except Exception as e:
-        return e.args
+        message = format_message(e.args)
+        errcode, errmsg = message[0], message[1]
+        logger.info(f"连接失败: {host}, errcode: {errcode}, errmsg: {errmsg}")
 
 
-async def excutor(host_list):
+async def excutor(hosts):
     tasks = []
-    for host in host_list:
+    for host in hosts:
         task = asyncio.create_task(ssh2(host))
         tasks.append(task)
-        task.add_done_callback(partial(on_job_done, host))
-    # await asyncio.gather(*tasks)
     for f in tqdm(asyncio.as_completed(tasks), total=len(tasks), desc="Connect SSH"):
         await f
 
@@ -77,11 +72,11 @@ def main():
     filepath = f"device_list.csv"
     logger.info(f"正在加载: {filepath}")
     data = import_cvs(filepath)
-    host_list = get_hosts(data)
+    hosts = get_hosts(data)
     logger.info("加载完成")
     loop = asyncio.get_event_loop()
     try:
-        loop.run_until_complete(excutor(host_list))
+        loop.run_until_complete(excutor(hosts))
     finally:
         loop.close()
 
