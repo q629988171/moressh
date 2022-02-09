@@ -99,9 +99,7 @@ def main():
     logger.info("加载完成")
     print('Starting, use <Ctrl-C> to stop')
     loop = asyncio.get_event_loop()
-    logger.info("get_event_loop")
     try:
-        logger.info("run_until_complete")
         loop.run_until_complete(excutor(hosts))
     except KeyboardInterrupt:
         asyncio.gather(*asyncio.Task.all_tasks()).cancel()
