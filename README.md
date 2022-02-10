@@ -10,8 +10,9 @@
 
 ## 跳板机使用说明
 
-1. 编辑 jumphost.json, 添加跳板机
-2. 编辑 device_list.csv, "jumphost" 字段, 添加跳板机名称
+1. 编辑 jumphost.json, 添加跳板机.
+2. 编辑 device_list.csv->"jumphost" 字段, 添加跳板机名称.
+3. 没有跳板机只需保持 device_list.csv->"jumphost" 字段为空.
 
 ## 特性
 
@@ -20,6 +21,10 @@
 - 写入日志
 - 多个命令
 - 跳板机连接
+
+## 注意
+
+仅支持linux主机, 其他类型设备可能会有问题.
 
 ## todo
 
