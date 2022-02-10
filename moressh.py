@@ -22,6 +22,18 @@ def format_message(msg):
     return errcode, errmsg
 
 
+def get_jumphosts(file):
+    """加载json格式配置文件
+
+    :param file: json文件名
+    :return: json格式数据
+
+    """
+    with open(file, "r") as f:
+        json_data = json.load(f)
+        return json_data
+
+
 def import_cvs(filepath):
     """导入 cvs文件
 
@@ -44,39 +56,40 @@ def get_hosts(data):
     return hosts
 
 
-async def ssh_connect(host, port, username, password, known_hosts):
-    """连接SSH
-
-    :param host: 主机
-    :param port: 端口
-    :param username: 用户名
-    :param password: 密码
-    :param known_hosts: 访问过计算机的公钥
-    :return: 连接对象
+async def ssh_connect(jumphost=None, *args, **kwargs):
     """
-    conn = await asyncssh.connect(host=str(host), port=port, username=str(username), password=str(password),
-                                  known_hosts=known_hosts)
+
+    :param jumphost: 跳板机
+    :param args: 主机信息
+    :param kwargs: 跳板机信息
+    :return: SSH对象
+    """
+
+    if jumphost:
+        tunnel = await asyncssh.connect(kwargs['jump_host'], kwargs['jump_port'], username=kwargs['jump_username'],
+                                        password=kwargs['jump_password'], known_hosts=None)
+        conn = await tunnel.connect_ssh(args[0], args[1], username=args[2], password=args[3],
+                                        known_hosts=None)
+    else:
+        conn = await asyncssh.connect(args[0], args[1], username=args[2], password=args[3], known_hosts=None)
     return conn
 
 
-async def run_commands(host, port, username, password, known_hosts, commands):
+async def run_commands(jumphost=None, *args, **kwargs):
     """执行多个命令
 
-    :param host: 主机
-    :param port: 端口
-    :param username: 用户名
-    :param password: 密码
-    :param known_hosts: 访问过计算机的公钥
-    :param commands: 命令
+    :param jumphost: 跳板机
+    :param args: 主机信息
+    :param kwargs: 跳板机信息
     :return: 执行结果
     """
     results = []
+    commands = args[4].split(';')
     try:
-        conn = await ssh_connect(host=str(host), port=port, username=str(username), password=str(password),
-                                 known_hosts=known_hosts)
+        conn = await ssh_connect(jumphost, *args, **kwargs)
         async with conn:
             # 执行SSH命令
-            for command in commands.split(';'):
+            for command in commands:
                 result = await conn.run(command, check=True)
                 results.append(result.stdout)
             return 0, results
@@ -87,31 +100,43 @@ async def run_commands(host, port, username, password, known_hosts, commands):
         return errcode, errmsg
 
 
-async def run_command(host_conf):
+async def run_command(host_conf, jumphost_conf):
     """执行命令
 
+    :param jumphost_conf: 跳板机信息(json)
     :param host_conf: 主机信息(字典)
     """
     host = host_conf.get('host', '127.0.0.1')
     port = host_conf.get('port', 22)
     username = host_conf.get('username', 'admin')
     password = host_conf.get('password', 'admin')
-    # 如果机器时第一次SSH登录，需要将known_hosts 设置为None，否在会报错
-    known_hosts = host_conf.get('known_hosts', None)
     commands = host_conf.get('commands', 'whoami')
+    jumphost = host_conf.get('jumphost', None)
     logger.info(f"正在连接: {host}:{port}")
-    result = await run_commands(host, port, username, password, known_hosts, commands)
+    if jumphost:
+        result = await run_commands(
+            jumphost,
+            str(host), port, str(username), str(password), commands,
+            jump_host=str(jumphost_conf[jumphost]["host"]),
+            jump_port=jumphost_conf[jumphost]["port"],
+            jump_username=str(jumphost_conf[jumphost]["username"]),
+            jump_password=str(jumphost_conf[jumphost]["password"])
+        )
+    else:
+        result = await run_commands(jumphost, str(host), port, str(username), str(password), commands)
+
     logger.info(f"连接完成: {host}:{port}, errcode: {result[0]}, errmsg: {result[1]}")
 
 
-async def parallel_run(hosts):
+async def parallel_run(hosts, jumphosts):
     """连接多个主机
 
+    :param jumphosts: 跳板机信息(json)
     :param hosts: 主机信息(字典)
     """
     tasks = []
     for host in hosts:
-        task = asyncio.create_task(run_command(host))
+        task = asyncio.create_task(run_command(host, jumphosts))
         tasks.append(task)
     for f in tqdm(asyncio.as_completed(tasks), total=len(tasks), desc="Connect SSH"):
         await f
@@ -125,16 +150,15 @@ def main():
     logger.info(f"正在加载: {filepath}")
     data = import_cvs(filepath)
     hosts = get_hosts(data)
-    logger.info("加载完成")
+    logger.info(f"加载完成: {filepath}")
+    jumphosts = get_jumphosts("jumphost.json")
     print('Starting, use <Ctrl-C> to stop')
     loop = asyncio.get_event_loop()
     try:
-        loop.run_until_complete(parallel_run(hosts))
+        loop.run_until_complete(parallel_run(hosts, jumphosts))
     except KeyboardInterrupt:
         asyncio.gather(*asyncio.Task.all_tasks()).cancel()
         loop.stop()
-    finally:
-        loop.close()
 
 
 if __name__ == '__main__':
