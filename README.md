@@ -2,6 +2,11 @@
 
 从 csv 文件导入HOST信息, 连接SSH, 执行命令
 
+## 环境说明
+
+- Windows 10 x64
+- Python 3.8.10
+
 ## 使用说明
 
 1. 安装依赖库: pip install -r requirements.txt
