@@ -10,7 +10,7 @@
 ## 使用说明
 
 1. 安装依赖库: pip install -r requirements.txt
-2. 编辑 device_list.csv
+2. 编辑 device_list.csv(主机信息)
 3. python moressh.py
 
 ## 跳板机使用说明
